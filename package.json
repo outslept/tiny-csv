@@ -1,28 +1,27 @@
 {
   "name": "tiny-csv",
-  "version": "0.0.0",
-  "description": "A starter for creating a TypeScript package.",
-  "homepage": "https://github.com/author/library#readme",
+  "version": "0.1.0",
+  "description": "Strict RFC 4180 CSV parser and serializer. Zero dependencies.",
+  "keywords": [
+    "csv",
+    "minimal",
+    "parse",
+    "rfc4180",
+    "stringify"
+  ],
+  "homepage": "https://github.com/outslept/tiny-csv#readme",
   "bugs": {
-    "url": "https://github.com/author/library/issues"
+    "url": "https://github.com/outslept/tiny-csv/issues"
   },
-  "license": "MIT",
-  "author": "Author Name <author.name@mail.com>",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/author/library.git"
+    "url": "git+https://github.com/outslept/tiny-csv.git"
   },
   "files": [
     "dist"
   ],
   "type": "module",
-  "exports": {
-    ".": "./dist/index.mjs",
-    "./package.json": "./package.json"
-  },
-  "publishConfig": {
-    "access": "public"
-  },
+  "sideEffects": false,
   "scripts": {
     "build": "vp pack",
     "dev": "vp pack --watch",
