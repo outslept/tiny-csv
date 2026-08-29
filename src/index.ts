@@ -7,8 +7,9 @@ export interface ParseOptions {
   delimiter?: string;
 }
 
-const CRLF = "\r\n";
+const CR = "\r";
 const LF = "\n";
+const CRLF = "\r\n";
 const QUOTE = '"';
 
 const assertDelimiter = (delimiter: string): void => {
@@ -16,8 +17,6 @@ const assertDelimiter = (delimiter: string): void => {
     throw new Error("csv: delimiter must be a single character, not quote or newline");
   }
 };
-
-const CR = "\r";
 
 export function parse(input: string, options: ParseOptions = {}): string[][] | Row[] {
   const delimiter = options.delimiter ?? ",";
@@ -33,23 +32,21 @@ export function parse(input: string, options: ParseOptions = {}): string[][] | R
 }
 
 function parseRows(input: string, delimiter: string): string[][] {
+  if (input === "") return [];
+
   const rows: string[][] = [];
   let fields: string[] = [];
   let field = "";
   let inQuotes = false;
-  let fieldStarted = false;
   let i = 0;
 
   const endField = () => {
     fields.push(field);
     field = "";
-    fieldStarted = false;
   };
   const endRecord = () => {
     endField();
-    if (!(fields.length === 1 && fields[0] === "" && !fieldStarted)) {
-      rows.push(fields);
-    }
+    rows.push(fields);
     fields = [];
   };
 
@@ -64,20 +61,21 @@ function parseRows(input: string, delimiter: string): string[][] {
         } else {
           inQuotes = false;
           i += 1;
+          const next = input[i];
+          if (next !== undefined && next !== delimiter && next !== CR && next !== LF) {
+            throw new Error("csv: unexpected character after closing quote");
+          }
         }
-        continue;
+      } else {
+        field += ch;
+        i += 1;
       }
-      field += ch;
-      i += 1;
       continue;
     }
 
     if (ch === QUOTE) {
-      if (field !== "") {
-        throw new Error("csv: quote inside unquoted field");
-      }
+      if (field !== "") throw new Error("csv: quote inside unquoted field");
       inQuotes = true;
-      fieldStarted = true;
       i += 1;
       continue;
     }
@@ -88,13 +86,8 @@ function parseRows(input: string, delimiter: string): string[][] {
       continue;
     }
 
-    if (ch === CR) {
-      if (input[i + 1] === LF) i += 1;
-      endRecord();
-      i += 1;
-      continue;
-    }
-    if (ch === LF) {
+    if (ch === CR || ch === LF) {
+      if (ch === CR && input[i + 1] === LF) i += 1;
       endRecord();
       i += 1;
       continue;
@@ -105,8 +98,9 @@ function parseRows(input: string, delimiter: string): string[][] {
   }
 
   if (inQuotes) throw new Error("csv: unterminated quoted field");
-  if (i > 0 && (input[input.length - 1] === CR || input[input.length - 1] === LF)) return rows;
-  endRecord();
+
+  const last = input[input.length - 1];
+  if (last !== CR && last !== LF) endRecord();
   return rows;
 }
 
@@ -119,13 +113,20 @@ export function stringify(
   return rows
     .map((row) => {
       const fields = Array.isArray(row) ? row : Object.values(row);
-      return fields.map(quote).join(delimiter);
+      return fields.map((value) => quote(value, delimiter)).join(delimiter);
     })
     .join(CRLF);
 }
 
-const quote = (value: string): string => {
+const quote = (value: string, delimiter: string): string => {
   if (value === "") return value;
-  if (/[",\r\n]/.test(value)) return QUOTE + value.replaceAll(QUOTE, QUOTE + QUOTE) + QUOTE;
+  if (
+    value.includes(delimiter) ||
+    value.includes(QUOTE) ||
+    value.includes(CR) ||
+    value.includes(LF)
+  ) {
+    return QUOTE + value.replaceAll(QUOTE, QUOTE + QUOTE) + QUOTE;
+  }
   return value;
 };
