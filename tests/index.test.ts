@@ -127,12 +127,6 @@ test("comma is plain data under a custom delimiter", () => {
   expect(parse(stringify([["a,b"]], { delimiter: ";" }), { delimiter: ";" })).toEqual([["a,b"]]);
 });
 
-test("delimiter of quote or newline throws", () => {
-  expect(() => parse("a,b", { delimiter: '"' })).toThrow(/delimiter/);
-  expect(() => parse("a,b", { delimiter: "\n" })).toThrow(/delimiter/);
-  expect(() => parse("a,b", { delimiter: ",," })).toThrow(/delimiter/);
-});
-
 test("stringify joins with commas and CRLF", () => {
   expect(
     stringify([

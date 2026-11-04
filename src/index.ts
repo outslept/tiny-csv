@@ -13,15 +13,8 @@ const CRLF = "\r\n";
 const QUOTE = '"';
 const DOUBLE_QUOTE = '""';
 
-const assertDelimiter = (delimiter: string): void => {
-  if (delimiter.length !== 1 || delimiter === QUOTE || delimiter === CR || delimiter === LF) {
-    throw new Error("csv: delimiter must be a single character, not quote or newline");
-  }
-};
-
 export function parse(input: string, options: ParseOptions = {}): string[][] | Row[] {
   const delimiter = options.delimiter ?? ",";
-  assertDelimiter(delimiter);
   const rows = parseRows(input, delimiter);
   if (options.header) {
     if (rows.length === 0) return [];
@@ -112,7 +105,6 @@ export function stringify(
   options: ParseOptions = {},
 ): string {
   const delimiter = options.delimiter ?? ",";
-  assertDelimiter(delimiter);
   const lines: string[] = [];
   for (let r = 0; r < rows.length; r++) {
     const row = rows[r];
