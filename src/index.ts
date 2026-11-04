@@ -11,6 +11,7 @@ const CR = "\r";
 const LF = "\n";
 const CRLF = "\r\n";
 const QUOTE = '"';
+const DOUBLE_QUOTE = '""';
 
 const assertDelimiter = (delimiter: string): void => {
   if (delimiter.length !== 1 || delimiter === QUOTE || delimiter === CR || delimiter === LF) {
@@ -23,84 +24,86 @@ export function parse(input: string, options: ParseOptions = {}): string[][] | R
   assertDelimiter(delimiter);
   const rows = parseRows(input, delimiter);
   if (options.header) {
-    const [header, ...rest] = rows;
-    return rest.map((fields) =>
-      Object.fromEntries(header.map((name, i) => [name, fields[i] ?? ""])),
-    );
+    if (rows.length === 0) return [];
+    const header = rows[0];
+    const result: Row[] = [];
+    for (let r = 1; r < rows.length; r++) {
+      const fields = rows[r];
+      const row: Row = {};
+      for (let c = 0; c < header.length; c++) {
+        row[header[c]] = fields[c] ?? "";
+      }
+      result.push(row);
+    }
+    return result;
   }
   return rows;
 }
 
 function parseRows(input: string, delimiter: string): string[][] {
-  if (input === "") return [];
+  const len = input.length;
+  if (len === 0) return [];
 
+  const delim = delimiter.charCodeAt(0);
   const rows: string[][] = [];
   let fields: string[] = [];
-  let field = "";
-  let inQuotes = false;
   let i = 0;
 
-  const endField = () => {
-    fields.push(field);
-    field = "";
-  };
-  const endRecord = () => {
-    endField();
-    rows.push(fields);
-    fields = [];
-  };
+  while (i < len) {
+    let c = input.charCodeAt(i);
 
-  while (i < input.length) {
-    const ch = input[i];
-
-    if (inQuotes) {
-      if (ch === QUOTE) {
-        if (input[i + 1] === QUOTE) {
-          field += QUOTE;
-          i += 2;
-        } else {
-          inQuotes = false;
-          i += 1;
-          const next = input[i];
-          if (next !== undefined && next !== delimiter && next !== CR && next !== LF) {
-            throw new Error("csv: unexpected character after closing quote");
-          }
+    if (c === 34) {
+      let field = "";
+      let start = ++i;
+      while (true) {
+        const q = input.indexOf(QUOTE, i);
+        if (q === -1) throw new Error("csv: unterminated quoted field");
+        if (input.charCodeAt(q + 1) === 34) {
+          field += input.slice(start, q + 1);
+          start = i = q + 2;
+          continue;
         }
-      } else {
-        field += ch;
-        i += 1;
+        field += input.slice(start, q);
+        i = q + 1;
+        break;
       }
-      continue;
+      fields.push(field);
+      if (i >= len) {
+        rows.push(fields);
+        return rows;
+      }
+      c = input.charCodeAt(i);
+      if (c !== delim && c !== 13 && c !== 10) {
+        throw new Error("csv: unexpected character after closing quote");
+      }
+    } else {
+      const start = i;
+      while (i < len && (c = input.charCodeAt(i)) !== delim && c !== 13 && c !== 10) {
+        if (c === 34) throw new Error("csv: quote inside unquoted field");
+        i++;
+      }
+      fields.push(input.slice(start, i));
+      if (i >= len) {
+        rows.push(fields);
+        return rows;
+      }
     }
 
-    if (ch === QUOTE) {
-      if (field !== "") throw new Error("csv: quote inside unquoted field");
-      inQuotes = true;
-      i += 1;
-      continue;
+    if (c === delim) {
+      i++;
+      if (i === len) {
+        fields.push("");
+        rows.push(fields);
+        return rows;
+      }
+    } else {
+      if (c === 13 && input.charCodeAt(i + 1) === 10) i++;
+      rows.push(fields);
+      fields = [];
+      i++;
     }
-
-    if (ch === delimiter) {
-      endField();
-      i += 1;
-      continue;
-    }
-
-    if (ch === CR || ch === LF) {
-      if (ch === CR && input[i + 1] === LF) i += 1;
-      endRecord();
-      i += 1;
-      continue;
-    }
-
-    field += ch;
-    i += 1;
   }
 
-  if (inQuotes) throw new Error("csv: unterminated quoted field");
-
-  const last = input[input.length - 1];
-  if (last !== CR && last !== LF) endRecord();
   return rows;
 }
 
@@ -110,23 +113,27 @@ export function stringify(
 ): string {
   const delimiter = options.delimiter ?? ",";
   assertDelimiter(delimiter);
-  return rows
-    .map((row) => {
-      const fields = Array.isArray(row) ? row : Object.values(row);
-      return fields.map((value) => quote(value, delimiter)).join(delimiter);
-    })
-    .join(CRLF);
+  const lines: string[] = [];
+  for (let r = 0; r < rows.length; r++) {
+    const row = rows[r];
+    const fields = Array.isArray(row) ? row : Object.values(row);
+    let line = "";
+    for (let c = 0; c < fields.length; c++) {
+      if (c > 0) line += delimiter;
+      line += quote(fields[c], delimiter);
+    }
+    lines.push(line);
+  }
+  return lines.join(CRLF);
 }
 
 const quote = (value: string, delimiter: string): string => {
   if (value === "") return value;
-  if (
-    value.includes(delimiter) ||
-    value.includes(QUOTE) ||
-    value.includes(CR) ||
-    value.includes(LF)
-  ) {
-    return QUOTE + value.replaceAll(QUOTE, QUOTE + QUOTE) + QUOTE;
+  if (value.includes(QUOTE)) {
+    return QUOTE + value.replaceAll(QUOTE, DOUBLE_QUOTE) + QUOTE;
+  }
+  if (value.includes(delimiter) || value.includes(LF) || value.includes(CR)) {
+    return QUOTE + value + QUOTE;
   }
   return value;
 };
