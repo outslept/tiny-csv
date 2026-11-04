@@ -32,4 +32,4 @@ stringify([["a,b", 'c"d', "plain"]]);
 | `delimiter` | `","`   | Any single character except `"` and newlines                     |
 
 Custom delimiters make the comma plain data: under `{ delimiter: ";" }` the
-field `a,b` is quoted on output and parsed back as one field.
+field `a,b` stays unquoted on output and is parsed back as one field.
