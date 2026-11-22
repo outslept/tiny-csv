@@ -22,14 +22,17 @@ parse('"a,b","say ""hi""",c');
 ```typescript
 stringify([["a,b", 'c"d', "plain"]]);
 // '"a,b","c""d",plain'
+
+stringify([{ a: 1, b: "two" }], { header: true });
+// "a,b\r\n1,two"
 ```
 
 ## Options
 
-| Option      | Default | Meaning                                                          |
-| ----------- | ------- | ---------------------------------------------------------------- |
-| `header`    | `false` | First row is a header; result is `Row[]` instead of `string[][]` |
-| `delimiter` | `","`   | Any single character except `"` and newlines                     |
+| Option      | Default | Meaning                                                                                           |
+| ----------- | ------- | ------------------------------------------------------------------------------------------------- |
+| `header`    | `false` | `parse`: maps first row to `Row[]` keys. `stringify`: prepends header row when given object rows. |
+| `delimiter` | `","`   | Any single character except `"` and newlines.                                                     |
 
 Custom delimiters make the comma plain data: under `{ delimiter: ";" }` the
 field `a,b` stays unquoted on output and is parsed back as one field.
