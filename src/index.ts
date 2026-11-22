@@ -1,8 +1,7 @@
-export interface Row {
-  [column: string]: string;
-}
+export type CSVValue = string | number | boolean | null | undefined;
+export type Row = Record<string, string>;
 
-export interface ParseOptions {
+export interface CSVOptions {
   header?: boolean;
   delimiter?: string;
 }
@@ -13,18 +12,29 @@ const CRLF = "\r\n";
 const QUOTE = '"';
 const DOUBLE_QUOTE = '""';
 
-export function parse(input: string, options: ParseOptions = {}): string[][] | Row[] {
+export function parse<T extends Record<string, string> = Row>(
+  input: string,
+  options: CSVOptions & { header: true },
+): T[];
+export function parse(input: string, options?: CSVOptions & { header?: false }): string[][];
+export function parse(input: string, options?: CSVOptions): string[][] | Row[];
+export function parse(input: string, options: CSVOptions = {}): string[][] | Row[] {
   const delimiter = options.delimiter ?? ",";
-  const rows = parseRows(input, delimiter);
+  if (delimiter.length !== 1) {
+    throw new Error("csv: delimiter must be a single character");
+  }
+  const clean = input.charCodeAt(0) === 0xfeff ? input.slice(1) : input;
+  const rows = parseRows(clean, delimiter.charCodeAt(0));
+
   if (options.header) {
     if (rows.length === 0) return [];
-    const header = rows[0];
+    const header = rows[0]!;
     const result: Row[] = [];
     for (let r = 1; r < rows.length; r++) {
-      const fields = rows[r];
+      const fields = rows[r]!;
       const row: Row = {};
       for (let c = 0; c < header.length; c++) {
-        row[header[c]] = fields[c] ?? "";
+        row[header[c]!] = fields[c] ?? "";
       }
       result.push(row);
     }
@@ -33,18 +43,15 @@ export function parse(input: string, options: ParseOptions = {}): string[][] | R
   return rows;
 }
 
-function parseRows(input: string, delimiter: string): string[][] {
+function parseRows(input: string, delim: number): string[][] {
   const len = input.length;
   if (len === 0) return [];
-
-  const delim = delimiter.charCodeAt(0);
   const rows: string[][] = [];
   let fields: string[] = [];
   let i = 0;
 
   while (i < len) {
     let c = input.charCodeAt(i);
-
     if (c === 34) {
       let field = "";
       let start = ++i;
@@ -81,7 +88,6 @@ function parseRows(input: string, delimiter: string): string[][] {
         return rows;
       }
     }
-
     if (c === delim) {
       i++;
       if (i === len) {
@@ -96,31 +102,51 @@ function parseRows(input: string, delimiter: string): string[][] {
       i++;
     }
   }
-
   return rows;
 }
 
 export function stringify(
-  rows: readonly (readonly string[] | Row)[],
-  options: ParseOptions = {},
+  rows: readonly (readonly CSVValue[] | Record<string, CSVValue>)[],
+  options: CSVOptions = {},
 ): string {
   const delimiter = options.delimiter ?? ",";
+  if (delimiter.length !== 1) {
+    throw new Error("csv: delimiter must be a single character");
+  }
+  if (rows.length === 0) return "";
+
   const lines: string[] = [];
+  const first = rows[0]!;
+  const isObjectRow = !Array.isArray(first);
+  const keys = isObjectRow ? Object.keys(first) : undefined;
+
+  if (options.header && keys) {
+    lines.push(keys.map((k) => quote(k, delimiter)).join(delimiter));
+  }
+
   for (let r = 0; r < rows.length; r++) {
-    const row = rows[r];
-    const fields = Array.isArray(row) ? row : Object.values(row);
+    const row = rows[r]!;
     let line = "";
-    for (let c = 0; c < fields.length; c++) {
-      if (c > 0) line += delimiter;
-      line += quote(fields[c], delimiter);
+    if (Array.isArray(row)) {
+      for (let c = 0; c < row.length; c++) {
+        if (c > 0) line += delimiter;
+        line += quote(row[c], delimiter);
+      }
+    } else {
+      const cols = keys ?? Object.keys(row);
+      for (let c = 0; c < cols.length; c++) {
+        if (c > 0) line += delimiter;
+        line += quote((row as Record<string, CSVValue>)[cols[c]!], delimiter);
+      }
     }
     lines.push(line);
   }
   return lines.join(CRLF);
 }
 
-const quote = (value: string, delimiter: string): string => {
-  if (value === "") return value;
+function quote(raw: CSVValue, delimiter: string): string {
+  if (raw === null || raw === undefined || raw === "") return "";
+  const value = typeof raw === "string" ? raw : String(raw);
   if (value.includes(QUOTE)) {
     return QUOTE + value.replaceAll(QUOTE, DOUBLE_QUOTE) + QUOTE;
   }
@@ -128,4 +154,4 @@ const quote = (value: string, delimiter: string): string => {
     return QUOTE + value + QUOTE;
   }
   return value;
-};
+}
